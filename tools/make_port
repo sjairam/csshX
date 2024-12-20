@@ -1,0 +1,52 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use IPC::Open2;
+use LWP::Simple qw(get);
+
+my ($in, $out);
+my $version = $ARGV[0] || die "Usage: $0 verion_number";
+
+my $port = get 'http://svn.macports.org/repository/macports/trunk/dports/net/csshX/Portfile';
+
+open($out, "> Portfile.orig") || die $!;
+print $out $port;
+close($out);
+
+$port =~ s/(version\s+)[-\d.]+/$1$version/;
+
+my $data = get "http://csshx.googlecode.com/files/csshX-$version.tgz" || die "get failed";
+
+open2($out, $in, 'openssl dgst -md5');
+print $in $data; close($in);
+(my $md5 = <$out>) =~ s/(\(stdin\)=|\s+)//g;
+
+print "MD5: $md5\n";
+$port =~ s/(md5\s+)\w+/$1$md5/g;
+
+open2($out, $in, 'openssl dgst -sha1');
+print $in $data; close($in);
+(my $sha1 = <$out>) =~ s/(\(stdin\)=|\s+)//g;
+print "SHA1: $sha1\n";
+$port =~ s/(sha1\s+)\w+/$1$md5/g;
+
+open2($out, $in, 'openssl dgst -ripemd160');
+print $in $data; close($in);
+(my $rmd160 = <$out>)  =~ s/(\(stdin\)=|\s+)//g;
+print "RMD160: $rmd160\n";
+$port =~ s/(rmd160\s+)\w+/$1$md5/g;
+
+
+open($out, "> Portfile") || die $!;
+print $out $port;
+close($out);
+
+print "\n";
+
+my $patch_file = "csshX-$version.patch";
+system("diff -u Portfile.orig Portfile > $patch_file");
+unlink "Portfile";
+unlink "Portfile.orig";
+print "Patch waiting in: $patch_file\n";
